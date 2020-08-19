@@ -1,3 +1,6 @@
+### This is a forked version from jsmitar/playbar2, updated to QtQuick 2.7 to fix empty widget problem in plasma.
+
+本仓库是从jsmitar/playbar2 clone过来的, 通过将QtQuick升级到2.7来修复某些情况下widget显示为空的问题.
 
 # PlayBar2
 
