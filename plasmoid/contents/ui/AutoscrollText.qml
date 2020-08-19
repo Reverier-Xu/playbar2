@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,7 +16,7 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 
 Item {
     id: scroll
@@ -35,50 +35,22 @@ Item {
 
     property bool reverse: false
 
-    readonly property int contentSize: target.contentWidth
-
-    readonly property int size: target.width
-
     focus: false
 
-    MouseArea {
-        id: mouseArea
-        anchors.fill: parent
-        acceptedButtons: Qt.NoButton
-        hoverEnabled: true
-        onEntered: start()
-    }
-
-    function start() {
-        if (!anim.running && _isScrollable()) {
-            scrolling = true
-            anim.start()
-        }
-    }
-
-    function restart() {
-        stop()
-        if (_isScrollable()) {
-            scrolling = true
-            anim.restart()
-        }
-    }
-
-    function stop() {
-        anim.stop()
-        if (vertical) target.y = 0
-        else target.x = 0
-    }
-
-    function _isScrollable() {
-        return isScrollable = contentSize > size || target.truncated
-    }
+    Component.onCompleted: if (autoScroll) anim.run()
 
     Connections {
         target: scroll.target
-        onWidthChanged: scroll.stop()
-        onHeightChanged: scroll.stop()
-        onTextChanged: scroll.stop()
+
+        onWidthChanged: anim.stop()
+        onHeightChanged: anim.stop()
+
+        onTextChanged: {
+            if (autoScroll)
+                anim.run()
+            else
+                anim.stop()
+        }
     }
 
     SequentialAnimation {
@@ -87,15 +59,39 @@ Item {
 
         loops: autoScroll ? 2 : 1
 
+        readonly property int contentSize: target.contentWidth
+        readonly property int size: target.width
+
         onStopped: {
-            if (_isScrollable() && mouseArea.containsMouse)
-                anim.restart()
-            else
-                scrolling = false
+            isScrollable = contentSize > size || target.truncated
+
+            if (isScrollable) {
+                if (scrollArea.containsMouse) {
+                    anim.restart()
+                    return
+                }
+            }
+
+            scrolling = false
+        }
+
+        function run() {
+            isScrollable = contentSize > size || target.truncated
+            if (isScrollable && !anim.running) {
+                scrolling = true
+                anim.start()
+            } else if (scrolling && !anim.running) {
+                anim.start()
+            } else if (!anim.running) {
+                if (vertical)
+                    target.y = 0
+                else
+                    target.x = 0
+            }
         }
 
         PauseAnimation {
-            duration: 300
+            duration: 250
         }
 
         SmoothedAnimation {
@@ -104,7 +100,7 @@ Item {
             property: scroll.vertical ? 'y' : 'x'
             from: 0
             // It goes to the end of the text
-            to: (size - contentSize - theme.mSize(theme.defaultFont).width) *  (scroll.reverse ? -1 : 1)
+            to: (anim.size - anim.contentSize - theme.mSize(theme.defaultFont).width) * (scroll.reverse ? -1 : 1)
             velocity: scroll.velocity
         }
 
@@ -116,5 +112,15 @@ Item {
             to: 0
             velocity: scroll.velocity * 1.1
         }
+    }
+
+    MouseArea {
+        id: scrollArea
+
+        anchors.fill: parent
+        acceptedButtons: Qt.NoButton
+        hoverEnabled: true
+
+        onEntered: anim.run()
     }
 }

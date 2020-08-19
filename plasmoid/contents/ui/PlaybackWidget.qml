@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option ) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,8 +16,9 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import QtQuick.Layouts 1.2
+import org.kde.plasma.core 2.0 as PlasmaCore
 import org.kde.plasma.components 2.0 as PlasmaComponents
 
 PlaybackItem {
@@ -35,6 +36,16 @@ PlaybackItem {
 
     Layout.minimumHeight: buttons.implicitHeight
     Layout.alignment: Qt.AlignHCenter | Qt.AlignBottom
+
+    onPlayingChanged: {
+        if (!model.itemAt(1))
+            return
+
+        if (playing)
+            model.itemAt(1).iconSource = 'media-playback-pause'
+        else
+            model.itemAt(1).iconSource = 'media-playback-start'
+    }
 
     ListModel {
         id: playmodel
@@ -61,6 +72,7 @@ PlaybackItem {
             iconSource: icon
             visible: !(index === 2) | showStop
             property int size: !showStop && index === 1 ? buttonSize.width * 1.4 : buttonSize.width
+            enabled: mpris2.sourceActive
             Layout.minimumWidth: size
             Layout.minimumHeight: size
         }
@@ -81,25 +93,18 @@ PlaybackItem {
             onItemAdded: {
                 switch (index) {
                 case 0:
-                    item.clicked.connect(mpris2.previous)
-                    item.enabled = Qt.binding(function () { return mpris2.canGoPrevious })
+                    item.clicked.connect(previous)
                     break
                 case 1:
-                    item.clicked.connect(mpris2.playPause)
-                    item.enabled = Qt.binding(function () { return mpris2.canPlayPause })
-                    item.iconSource = Qt.binding(function() {
-                        return mpris2.playing ? 'media-playback-pause'
-                                              : 'media-playback-start'
-                    })
+                    item.clicked.connect(playPause)
                     //NOTE: update icon playing state
+                    playingChanged()
                     break
                 case 2:
-                    item.clicked.connect(mpris2.stop)
-                    item.enabled = Qt.binding(function () { return mpris2.canControl })
+                    item.clicked.connect(stop)
                     break
                 case 3:
-                    item.clicked.connect(mpris2.next)
-                    item.enabled = Qt.binding(function () { return mpris2.canGoNext })
+                    item.clicked.connect(next)
                     break
                 }
             }

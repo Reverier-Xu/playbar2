@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,7 +16,7 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import QtQuick.Layouts 1.2
 
 Flow {
@@ -42,26 +42,6 @@ Flow {
             : units.roundToIconSize(_minSize))
 
     readonly property bool loaded: loader.status === Loader.Ready
-
-
-    property bool containsMouse: false
-
-    onContainsMouseChanged: {
-        if (containsMouse)
-            toolTip.showToolTip()
-        else
-            toolTip.hideToolTip()
-    }
-
-    Component.onCompleted: toolTip.visualParent = playbackControl
-
-    onParentChanged: {
-        if (parent && parent.objectName === 'org.kde.desktop-CompactApplet') {
-            //! NOTE: disable the standard toolTip
-            parent.active = false
-            containsMouse = Qt.binding(function () { return parent.containsMouse })
-        }
-    }
 
     Loader {
         id: loader
@@ -110,7 +90,7 @@ Flow {
             onClicked: {
                 if (mpris2.sourceActive)
                     plasmoid.expanded = !plasmoid.expanded
-                else if (mpris2.recentSources.length > 0)
+                else
                     action_player0()
             }
         }

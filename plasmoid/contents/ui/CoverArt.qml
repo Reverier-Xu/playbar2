@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,58 +16,39 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import QtQuick.Layouts 1.2
-import QtQuick.Controls 1.4
 import org.kde.plasma.core 2.0 as PlasmaCore
 import QtGraphicalEffects 1.0
 
 Item {
     id: bg
 
-    readonly property int paintedWidth: noCover.visible ? noCover.paintedWidth : cover.paintedWidth
-    readonly property int paintedHeight: noCover.visible ? noCover.paintedHeight : cover.paintedHeight
-
-    readonly property int coverLeftMargin: (bg.width - paintedWidth) / 2 + units.smallSpacing
-    readonly property int coverTopMargin: (bg.height - paintedHeight) / 2 + units.smallSpacing
-
-    readonly property alias containsMouse: toggleWindow.containsMouse
-
-    property alias noCoverIcon: noCover.source
-    property bool forceNoCover: false
-
     width: units.iconSizes.enormous
     height: units.iconSizes.enormous
+
     Layout.fillWidth: true
     Layout.fillHeight: true
-
-    Timer {
-        id: timer
-        repeat: false
-        interval: 250
-
-        onTriggered: {
-            noCover.visible = cover.status === Image.Null || cover.status === Image.Error || forceNoCover
-        }
-    }
 
     PlasmaCore.IconItem {
         id: noCover
 
-        anchors.fill: parent
+        anchors.fill: cover
         source: 'nocover'
         smooth: true
+        opacity: mpris2.sourceActive ? 1 : 0.3
+        visible: cover.status === Image.Null || cover.status === Image.Error
     }
 
     Image {
         id: cover
 
-        source: Qt.resolvedUrl(mpris2.artUrl)
+        source: mpris2.artUrl
         fillMode: Image.PreserveAspectFit
         anchors.fill: parent
         mipmap: true
+        asynchronous: true
         cache: false
-        visible: !forceNoCover
 
         sourceSize.width: width
         sourceSize.height: height
@@ -102,7 +83,6 @@ Item {
                 animA.stop()
                 animB.start()
             }
-            timer.restart()
         }
 
         OpacityAnimator on opacity {
@@ -125,7 +105,5 @@ Item {
         anchors.fill: parent
         acceptedButtons: Qt.LeftButton
         onClicked: action_raise()
-        hoverEnabled: true
     }
-
 }

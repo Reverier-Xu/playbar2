@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,73 +16,74 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import org.kde.plasma.core 2.0 as PlasmaCore
+import "../code/utils.js" as Utils
 
 PlasmaCore.DataSource {
     id: mpris2
 
     engine: 'mpris2'
 
-    interval: 0 // update ondemand
+    interval: 0 // ondemand
 
-    readonly property bool sourceActive: connectedSources.length >= 1 && data[currentSource] !== undefined
-                                         && data[currentSource].InstancePid > 0
+    readonly property bool sourceActive: connectedSources.length >= 1
+
+    property alias source: mpris2.connectedSources
 
     property var service: null
 
     property string currentSource: ''
 
-    property var recentSources: []
+    property var recentSources: JSON.parse(plasmoid.configuration.RecentSources)
 
-    readonly property var metadata: sourceActive ? data[currentSource].Metadata : undefined
+    readonly property var metadata: currentSource ? data[currentSource].Metadata : undefined
 
-    readonly property string identity: sourceActive ? getIdentity(currentSource) : ''
+    readonly property string identity: currentSource ? capitalize(source) : ''
 
-    readonly property string playbackStatus: sourceActive ? data[currentSource].PlaybackStatus || 'Stopped' : 'Stopped'
+    readonly property string playbackStatus: currentSource
+                                             && sourceActive ? data[currentSource].PlaybackStatus : 'Stopped'
 
-    readonly property bool playing: playbackStatus === 'Playing'
+    readonly property string artUrl: metadata
+                                     && sourceActive ? metadata['mpris:artUrl']
+                                                       || '' : ''
 
-    readonly property string artUrl: metadata ? metadata['mpris:artUrl'] || '' : ''
+    readonly property string artist: metadata
+                                     && sourceActive ? metadata['xesam:artist']
+                                                       || '' : ''
 
-    readonly property string artist: metadata ? metadata['xesam:artist'] || '' : ''
+    readonly property string album: metadata
+                                    && sourceActive ? metadata['xesam:album']
+                                                      || '' : ''
 
-    readonly property string album: metadata ? metadata['xesam:album'] || '' : ''
+    readonly property string title: metadata
+                                    && sourceActive ? metadata['xesam:title']
+                                                      || '' : ''
 
-    readonly property string title: metadata ? metadata['xesam:title'] || '' : ''
+    property date positionLastUpdated: new Date(Date.UTC(0, 0, 0, 0, 0, 0))
 
-    readonly property real volume: sourceActive ? data[currentSource].Volume || 0 : 0
+    readonly property bool canControl: currentSource ? data[currentSource].CanControl : false
 
-    readonly property bool canControl: sourceActive ? data[currentSource].CanControl || false : false
+    readonly property bool canGoNext: currentSource ? data[currentSource].CanGoNext : false
 
-    readonly property bool canPlayPause: canPlay || canPause
+    readonly property bool canGoPrevious: currentSource ? data[currentSource].CanGoPrevious : false
 
-    readonly property bool canPlay: canControl ? data[currentSource].CanPlay || false : false
+    readonly property bool canSeek: currentSource ? data[currentSource].CanSeek : false
 
-    readonly property bool canPause: canControl ? data[currentSource].CanPause || false : false
+    readonly property bool canRaise: currentSource ? data[currentSource].CanRaise : false
 
-    readonly property bool canGoNext: canControl ? data[currentSource].CanGoNext || false : false
+    readonly property real volume: currentSource ? data[currentSource].Volume : 0
 
-    readonly property bool canGoPrevious: canControl ? data[currentSource].CanGoPrevious || false : false
-
-    readonly property bool canSeek: canControl ? data[currentSource].CanSeek || false : false
-
-    readonly property bool canRaise: canControl ? data[currentSource].CanRaise || false : false
-
-    readonly property bool canQuit: canControl ? data[currentSource].CanQuit || false : false
 
     // 	seconds
     property int length: 0
     // 	seconds
     property int position: 0
 
-    property date positionLastUpdated: new Date()
-
-    property bool positionUpdateEnable: true
+    property bool disablePositionUpdate: false
 
     function waitGetPosition() {
-        positionUpdateEnable = false
-        startOperation('GetPosition')
+        disablePositionUpdate = true
         _WaitGetPositionTimer.restart()
     }
 
@@ -90,31 +91,37 @@ PlasmaCore.DataSource {
         running: false
         repeat: false
         interval: 500
-
         onTriggered: {
-            positionUpdateEnable = true
+            disablePositionUpdate = false
             startOperation('GetPosition')
         }
     }
 
     readonly property Timer _GetPositionTimer: Timer {
-        running: positionUpdateEnable && playbackStatus !== 'Stopped'
+        running: !disablePositionUpdate && playbackStatus === 'Playing'
+                 && length > 0
         repeat: true
         triggeredOnStart: true
         interval: 1000
-        onTriggered: startOperation('GetPosition')
+        onTriggered: {
+            if (position + 1 <= length)
+                ++position
+            else
+                startOperation('GetPosition')
+        }
     }
 
     Component.onCompleted: {
-        var str = JSON.parse(plasmoid.configuration.RecentSources1)
-        recentSources = typeof str == 'string' ? JSON.parse(str) : str
-        console.log('typeof recentSources:', recentSources.constructor.name, recentSources)
         nextSource()
+
     }
 
     onSourceActiveChanged: {
-        if (sourceActive)
-            addRecentSource(currentSource)
+        if (sourceActive && identity)
+            return;
+
+        length = 0
+        position = 0
     }
 
     onLengthChanged: startOperation('GetPosition')
@@ -123,92 +130,75 @@ PlasmaCore.DataSource {
 
     onNewData: {
         var positionUpdatedUTC = data['Position last updated (UTC)']
-        if (positionLastUpdated < positionUpdatedUTC) {
+        if (!disablePositionUpdate
+                && positionLastUpdated < positionUpdatedUTC) {
             positionLastUpdated = positionUpdatedUTC
-
-            if (positionUpdateEnable) {
-                // to seconds
-                var p = Number(((data['Position'] || 0) / 1000000).toFixed(0))
-                var l = Number(((data['Metadata']['mpris:length'] || 0) / 1000000).toFixed(0))
-//                debug( "(length:" + l + ", position:" + p + ")" )
-
-                if (l !== length)
-                    length = l > 0 ? l : 0
-
-                position = p > 0 ? p : 0
-            }
+            //                      to seconds
+            var p = Number(((data['Position'] || 0) / 1000000).toFixed(0))
+            var l = Number(((data['Metadata']['mpris:length']
+                             || 0) / 1000000).toFixed(0))
+            //                      debug( "Position, length", "( " + p + ", " + l + " )" )
+            if (l !== length)
+                length = l
+            if (p <= l)
+                position = p
+            else
+                position = l
         }
     }
 
     onSourcesChanged: {
         if (connectedSources.length === 0)
             nextSource()
-
-        debug('sources:', sources)
     }
 
     onSourceAdded: {
-        if (connectedSources.length === 0)
-            nextSource()
 
-        debug('source added:', source)
+        // debug( 'Source added', source )
+        // debug( 'sources', sources )
+        if (source !== '@multiplex' && connectedSources.length === 0) {
+            connectSource(source)
+            playbarEngine.setSource(source)
+        }
     }
 
     onSourceRemoved: {
         if (source === currentSource)
             nextSource()
-
-        debug('source removed:', source)
     }
 
     onSourceConnected: {
         setService(source)
         currentSource = source
-        position = 0
-        length = 0
-        positionLastUpdated = new Date()
-        playbarEngine.setSource(source)
-
-        debug('source connected:', source)
+        debug('Source connected', source)
+        addRecentSource(source)
     }
 
     onSourceDisconnected: {
         setService(null)
-        debug('source disconnected:', source)
+        // debug( 'Disconnected', source )
     }
 
     function nextSource() {
-        var _sources = sources.filter(function(e) {
-            return e !== '@multiplex'
-        }).sort()
-
-        var _currentSource = currentSource
-
-        debug('connectedSources:', connectedSources.length)
-        debug('_sources', _sources.join(','))
-
-        if (_sources.length > 0 && connectedSources.length === 0) {
-            connectSource('@multiplex')
-            playbarEngine.setSource('@multiplex')
-            debug('next source: @multiplex')
-
-        } else if (_sources.length > 0) {
-            var i = _sources.indexOf(_currentSource)
-            i = i + 1 < _sources.length && i !== -1 ? i + 1 : 0
-
-            if (_sources[i] !== _currentSource) {
-                disconnectSource(_currentSource)
-                connectSource(_sources[i])
-                playbarEngine.setSource(_sources[i])
-                debug('next source:', _sources[i])
-            } else {
-                playbarEngine.setSource(_currentSource)
+        for (var i = 0; i < sources.length; i++) {
+            if (connectedSources[0] === sources[i]
+                    || connectedSources.length === 0
+                    || connectedSources === [''] || connectedSources === '') {
+                if (++i < sources.length && sources[i] !== '@multiplex') {
+                    disconnectSource(source[0])
+                    connectSource(sources[i])
+                    playbarEngine.setSource(sources[i])
+                } else if (++i < sources.length) {
+                    disconnectSource(source[0])
+                    connectSource(sources[i])
+                    playbarEngine.setSource(sources[i])
+                } else if (sources[0] !== '@multiplex') {
+                    disconnectSource(source[0])
+                    connectSource(sources[0])
+                    playbarEngine.setSource(sources[0])
+                }
+                return
             }
-
-        } else if (connectedSources.length > 0) {
-            disconnectSource('@multiplex')
-            playbarEngine.setSource('')
-            debug('next source:', 'Nothing')
         }
     }
 
@@ -217,140 +207,100 @@ PlasmaCore.DataSource {
             service = mpris2.serviceForSource(source)
         else
             service = null
+        // debug( 'Service active', ( service != null ) )
     }
 
-    function seek(secs) {
-        if (service && canSeek) {
-            var operation = service.operationDescription('SetPosition')
-            operation['microseconds'] = (secs * 1000000).toFixed(0)
+    function seek(position, currentPosition) {
+        if (service && (canControl || canSeek)) {
+            if (!canSeek)
+                debug("Trying seek, CanSeek is", canSeek)
             waitGetPosition()
-            service.startOperationCall(operation)
+            var job = service.operationDescription('SetPosition')
+            job['microseconds'] = (position * 1000000).toFixed(0)
+            service.startOperationCall(job)
         }
-        return secs
+        return position
+        // 		if ( source == 'clementine' ) {
+        // 			job = service.operationDescription( 'Seek' )
+        // 			job['microseconds'] = ( ( -currentPosition + position ) * 10000 ).toFixed( 0 )
+        // 			service.startOperationCall( job )
+        // 			return
+        // 		}
     }
 
     function startOperation(name) {
         if (service && canControl) {
-            var operation = service.operationDescription(name)
-            service.startOperationCall(operation)
+            var job = service.operationDescription(name)
+            service.startOperationCall(job)
         }
     }
 
     function setVolume(value) {
         if (service && canControl && service.isOperationEnabled('SetVolume')) {
-            var operation = service.operationDescription('SetVolume')
-            operation['level'] = Number(value.toFixed(2))
-            service.startOperationCall(operation)
+            var job = service.operationDescription('SetVolume')
+            job['level'] = Number(value.toFixed(2))
+            service.startOperationCall(job)
             value = value < 0 ? 0 : value
             value = value > 1.2 ? 1 : value
         }
         return value
     }
 
-    function playPause() {
-        if (playing) {
-            if (canPause)
-                startOperation('Pause')
-            else
-                startOperation('PlayPause')
-        } else {
-            if (canPlay)
-                startOperation('Play')
-            else
-                startOperation('PlayPause')
-        }
-    }
-
-    function stop() {
-        startOperation('Stop')
-    }
-
-    function next() {
-        startOperation('Next')
-    }
-
-    function previous() {
-        startOperation('Previous')
-    }
-
-    function getIdentity(source) {
-        if (sourceActive && source === currentSource && data[source]) {
-            var i = data[source].Identity
-
-            if (!i) {
-                i = source === '@multiplex' ? data[source]['Source Name'] : source
-                i = i.replace(/-/g, ' ')
-            }
-            return i.charAt(0).toUpperCase() + i.substr(1)
-        } else {
-            var e = recentSources.find(function (e) {
-                return source.match(e.source)
-            })
-
-            if (e)
-                return e.identity
-        }
-
-        var identity = source.replace(/\.instance[0-9]+/, '')
-        return identity.charAt(0).toUpperCase() + identity.substr(1)
+    function capitalize(source) {
+        var i = data[source]['Identity']
+        return i[0].toUpperCase() + i.substr(1)
     }
 
     function icon(source) {
-        var iconName = source.replace(/\.instance[0-9]+/i, '')
+        var icon = source
 
-        switch (iconName) {
-            case 'spotify':
-                iconName = 'spotify-client'
-                break
-            case 'clementine':
-                iconName = 'application-x-clementine'
-                break
-            case 'yarock':
-                iconName = 'application-x-yarock'
-                break
-            case '@multiplex':
-                if (sourceActive && currentSource == '@multiplex')
-                    iconName = icon(data[source]['Source Name'])
-                break
-        }
+        if (icon.match('vlc'))
+            icon = 'vlc'
 
-        if (!iconName)
-            return 'emblem-music-symbolic'
+            switch (icon) {
+                case 'spotify':
+                    icon = 'spotify-client'
+                    break
+                case 'clementine':
+                    icon = 'application-x-clementine'
+                    break
+                case 'yarock':
+                    icon = 'application-x-yarock'
+                    break
+            }
 
-        return iconName
+        return icon
     }
 
     function addRecentSource(source) {
-        var sourceName = source
+        if (plasmoid.configuration.RecentSources != '[]')
+            recentSources = JSON.parse(plasmoid.configuration.RecentSources)
 
-        // this condition control the case when the source is @multiplex
-        if (source === '@multiplex') {
-            if (sourceActive && currentSource === source)
-                sourceName = data[currentSource]['Source Name']
-            else
-                return
-        }
-
-        if (recentSources.length === 0)
+        if (recentSources.length == 0)
             recentSources = []
 
-        var index = recentSources.findIndex(function(e) {
-            return sourceName.match(e.source)
-        })
+        var index = function() {
+            for (var i = 0; i < recentSources.length; i++) {
+                if (recentSources[i].source == source)
+                    return i
+            }
+            return -1
+        }()
 
+        var elem
         if (index !== -1)
-            recentSources.splice(index, 1)
+            elem = recentSources.splice(index, 1)[0]
+        else
+            elem = {source: source, identity: capitalize(source), icon: icon(source)}
 
-        var newSource = {
-              source: sourceName.replace(/\.instance[0-9]+/, '')
-            , identity: getIdentity(source)
-            , icon: icon(sourceName)
-        }
+        console.debug('recentSource: ', JSON.stringify(elem))
+        recentSources.unshift(elem)
 
-        recentSources.unshift(newSource)
+        if (recentSources.length > 3)
+            recentSources.pop()
 
-        plasmoid.configuration.RecentSources1 = JSON.stringify(recentSources)
-        debug('recentSources:', plasmoid.configuration.RecentSources1)
+        plasmoid.configuration.RecentSources = JSON.stringify(recentSources)
+        console.log("recentSources:", plasmoid.configuration.RecentSources)
 
         recentSourcesChanged()
     }

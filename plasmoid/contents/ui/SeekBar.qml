@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,9 +16,10 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import org.kde.plasma.core 2.0 as PlasmaCore
 import org.kde.plasma.components 2.0 as PlasmaComponents
+import org.kde.plasma.plasmoid 2.0
 
 PlaybackItem {
     id: seekBar
@@ -32,6 +33,13 @@ PlaybackItem {
     height: visible ? control.height : 0
 
     readonly property int minWidth: Math.min(buttonSize.width, buttonSize.height)
+
+    onPlayingChanged: {
+        if (playing)
+            button.iconSource = 'media-playback-pause'
+        else
+            button.iconSource = 'media-playback-start'
+    }
 
     Flow {
         id: control
@@ -49,11 +57,11 @@ PlaybackItem {
                 svg: PlasmaCore.Svg {
                     imagePath: 'icons/media'
                 }
-                iconSource: mpris2.playing ? 'media-playback-pause' : 'media-playback-start'
+                iconSource: 'media-playback-start'
                 enabled: mpris2.sourceActive
 
                 size: minWidth
-                onClicked: mpris2.playPause()
+                onClicked: seekBar.playPause()
                 anchors.centerIn: parent
             }
 
@@ -71,8 +79,8 @@ PlaybackItem {
             value: 0
             stepSize: 1
             updateValueWhileDragging: true
-            visible: mpris2.playbackStatus !== 'Stopped' && slider.enabled
-            property int size: mpris2.playbackStatus === 'Stopped' || !slider.enabled ? 40 : playbarEngine.maxWidth
+            visible: mpris2.playbackStatus !== 'Stopped'
+            property int size: mpris2.playbackStatus === 'Stopped' ? 40 : playbarEngine.maxWidth
 
             Behavior on size {
                 SequentialAnimation {
@@ -83,7 +91,7 @@ PlaybackItem {
                     ScriptAction {
                         script: setVisible()
                         function setVisible() {
-                            if (mpris2.playbackStatus !== 'Stopped' && slider.enabled)
+                            if (mpris2.playbackStatus !== 'Stopped')
                                 slider.visible = true
                         }
                     }
@@ -93,7 +101,7 @@ PlaybackItem {
                     ScriptAction {
                         script: setNotVisible()
                         function setNotVisible() {
-                            if (mpris2.playbackStatus === 'Stopped' || slider.size <= 50 || !slider.enabled)
+                            if (mpris2.playbackStatus === 'Stopped' || slider.size <= 50)
                                 slider.visible = false
                         }
                     }

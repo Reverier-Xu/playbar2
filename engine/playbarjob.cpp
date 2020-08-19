@@ -41,11 +41,11 @@ PlayBarJob::~PlayBarJob()
 
 void PlayBarJob::start()
 {
-    if (operationName() == QStringLiteral("ShowSettings"))
+    if (operationName() == QLatin1String("ShowSettings"))
         m_playbar->showSettings();
 
-    if (operationName() == QStringLiteral("SetSourceMpris2"))
-        m_playbar->setSource(parameters()["source"].toString());
+    if (operationName() == QLatin1String("SetSourceMpris2"))
+        m_playbar->mpris2_source = parameters()["source"].toString();
 
     emitResult();
 }

@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,7 +16,7 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import QtQuick.Layouts 1.2
 import QtGraphicalEffects 1.0
 import org.kde.plasma.core 2.0 as PlasmaCore
@@ -63,16 +63,6 @@ GridLayout {
         Layout.minimumHeight: units.iconSizes.enormous
         Layout.alignment: Qt.AlignBottom
         Layout.maximumWidth: page.width / 2 - units.iconSizes.medium
-        opacity: mpris2.sourceActive ? 1 : 0.3
-
-        SourceSelectorButton {
-            anchors {
-                top: cover.top
-                left: cover.left
-                topMargin: cover.coverTopMargin
-                leftMargin: cover.coverLeftMargin
-            }
-        }
     }
     TrackInfo {
         id: trackInfo

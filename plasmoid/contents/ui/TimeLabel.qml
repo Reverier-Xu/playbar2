@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,86 +16,49 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import org.kde.plasma.components 2.0 as PlasmaComponents
+import "../code/utils.js" as Utils
 
 PlasmaComponents.Label {
     id: time
 
-    property alias type: time.state
+    // seconds
+    property int topTime: mpris2.length
 
-    readonly property int length: mpris2.length
-
-    property int position: 0
+    property int currentTime: 0
 
     property alias interactive: mouseArea.enabled
-
-    property int hour: 0
 
     property int min: 0
 
     property int sec: 0
 
-    property var _update: lengthUpdate
+    property bool minusFrontOfZero: true
 
-    state: type
     opacity: 0.8
+
     font: theme.smallestFont
 
     signal clicked
 
-    text: (type == 'remaining' ? '-' : '')
-          + (hour > 0 ? hour + ':': '')
-          + (hour > 0 && min < 10 ? '0' + min : min)
-          + ':' + (sec < 10 ? '0' + sec : sec)
+    text: (minusFrontOfZero ? '-' + min : min) + ':' + (sec < 10 ? '0' + sec : sec)
 
-    enabled: length > 0
-
-    onPositionChanged: _update()
-    onLengthChanged: _update()
-    onTypeChanged: _update()
-
-    states: [
-        State {
-            name: 'length'
-            PropertyChanges {
-                target: time
-                _update: lengthUpdate
-            }
-        },
-        State {
-            name: 'position'
-            PropertyChanges {
-                target: time
-                _update: positionUpdate
-            }
-        },
-        State {
-            name: 'remaining'
-            PropertyChanges {
-                target: time
-                _update: remainingUpdate
-            }
-        }
-    ]
+    enabled: topTime > 0
 
     function positionUpdate() {
-        hour = position / 3600
-        min = position / 60 - hour * 60
-        sec = position - hour * 3600 - min * 60
+        min = currentTime / 60
+        sec = currentTime - min * 60
     }
 
     function remainingUpdate() {
-        var remain = length - position
-        hour = remain / 3600
-        min = remain / 60 - hour * 60
-        sec = remain - hour * 3600 - min * 60
+        min = (topTime - currentTime) / 60
+        sec = topTime - currentTime - min * 60
     }
 
     function lengthUpdate() {
-        hour = length / 3600
-        min = length / 60 - hour * 60
-        sec = length - hour * 3600 - min * 60
+        min = topTime / 60
+        sec = topTime - min * 60
     }
 
     MouseArea {
@@ -105,11 +68,7 @@ PlasmaComponents.Label {
         acceptedButtons: Qt.LeftButton
         hoverEnabled: enabled
 
-        onClicked: {
-            if (containsMouse) {
-                time.clicked()
-                time._update()
-            }
-        }
+        onClicked: if (containsMouse)
+                       parent.clicked()
     }
 }

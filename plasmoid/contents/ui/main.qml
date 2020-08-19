@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,19 +16,14 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import QtQuick.Layouts 1.2
 import org.kde.plasma.core 2.0 as PlasmaCore
-import org.kde.plasma.extras 2.0 as PlasmaExtras
 import org.kde.plasma.plasmoid 2.0
 import "../code/utils.js" as Utils
 
 Item {
     id: root
-
-    readonly property bool vertical: plasmoid.formFactor === PlasmaCore.Types.Vertical
-    readonly property bool leftEdge: plasmoid.location === PlasmaCore.Types.LeftEdge
-    readonly property bool systray: plasmoid.pluginName === 'audoban.applet.playbar.systray'
 
     //! dataengine
     PlasmaCore.DataSource {
@@ -57,29 +52,13 @@ Item {
         ? data[source]['ShowSeekSlider'] : false
 
         readonly property int backgroundHint:
-        hasSource('BackgroundHint') && plasmoid.formFactor === PlasmaCore.Types.Planar
+        hasSource('BackgroundHint') && plasmoid.formFactor == PlasmaCore.Types.Planar
         ? data[source]['BackgroundHint'] : playbar.normal
 
         readonly property color shadowColor: hasSource('ShadowColor')
-        ? data[source]['ShadowColor'] : '#fff'
-
-        readonly property bool nextSource: hasSource('NextSource')
-        ? data[source]['NextSource'] : false
+        ? data[source]['ShadowColor'] : "#fff"
 
         property bool systrayArea: false
-
-        onNextSourceChanged: {
-            if (nextSource &&
-                    mpris2
-                    .sources
-                    .filter(function(e){return e !== '@multiplex'}).length > 0)
-            {
-                mpris2.nextSource()
-                toolTip.showToolTipChangingSource()
-            } else if (nextSource) {
-                action_player0()
-            }
-        }
 
         function showSettings() {
             if (!playbarEngine.valid)
@@ -137,100 +116,11 @@ Item {
         id: mpris2
     }
 
-    readonly property PlasmaCore.Dialog toolTip: PlasmaCore.Dialog {
-        id: toolTip
-        location: PlasmaCore.Types.Floating
-        type: PlasmaCore.Dialog.Tooltip
-        flags: Qt.ToolTip | Qt.WindowDoesNotAcceptFocus
-        outputOnly: true
-        visible: false
+    readonly property bool vertical: plasmoid.formFactor === PlasmaCore.Types.Vertical
+    readonly property bool leftEdge: plasmoid.location === PlasmaCore.Types.LeftEdge
+    readonly property bool systray: plasmoid.pluginName === 'audoban.applet.playbar.systray'
 
-        readonly property var showToolTip: _delay.restart
-        readonly property var hideToolTip: function() { _delay.stop(); hide() }
-        readonly property var showToolTipChangingSource: function () { _timer.restart(); showToolTip() }
-
-        readonly property Timer _delay: Timer {
-            repeat: false
-            running: false
-            interval: units.longDuration
-            onTriggered: toolTip.visible = !plasmoid.expanded
-        }
-
-        mainItem: GridLayout {
-            rows: 2
-            columns: 2
-            rowSpacing: units.smallSpacing
-            columnSpacing: units.largeSpacing
-            Layout.preferredWidth: implicitWidth
-
-            states: [
-                State {
-                    when: mpris2.playbackStatus === 'Stopped' && !_timer.running
-                    PropertyChanges { target: icon; Layout.rowSpan: 1; size: 32; forceNoCover: false }
-                    PropertyChanges { target: subText; visible: false }
-                    PropertyChanges { target: title; Layout.alignment: Qt.AlignVCenter }
-                },
-                State {
-                    when: mpris2.playbackStatus !== 'Stopped' && !_timer.running
-                    PropertyChanges { target: icon; Layout.rowSpan: 2; size: 48; forceNoCover: false }
-                    PropertyChanges { target: subText; visible: true }
-                    PropertyChanges { target: title; Layout.alignment: 0 }
-                },
-                State {
-                    name: 'changing_source'
-                    when: _timer.running
-                    PropertyChanges { target: icon; Layout.rowSpan: 1; size: 32; forceNoCover: true }
-                    PropertyChanges { target: subText; visible: false }
-                    PropertyChanges { target: title; Layout.alignment: Qt.AlignVCenter; text: mpris2.identity }
-                }
-            ]
-
-            Timer {
-                id: _timer
-                running: false
-                repeat: false
-                interval: 1250
-                onTriggered: toolTip.hideToolTip()
-            }
-
-            CoverArt {
-                id: icon
-                Layout.rowSpan: 2
-                Layout.fillWidth: false
-                property int size: 48
-                Layout.minimumWidth: size
-                Layout.minimumHeight: size
-                Layout.maximumWidth: size
-                Layout.maximumHeight: size
-                Layout.topMargin: units.smallSpacing
-                Layout.bottomMargin: units.smallSpacing
-                smooth: true
-                noCoverIcon: internal.icon
-            }
-
-            PlasmaExtras.Heading {
-                id: title
-                Layout.fillWidth: false
-                Layout.maximumWidth: 400
-                Layout.topMargin: units.smallSpacing
-                maximumLineCount: 1
-                horizontalAlignment: Text.AlignLeft
-                level: 3
-                text: internal.title
-            }
-
-            PlasmaExtras.Paragraph {
-                id: subText
-                Layout.fillWidth: false
-                Layout.maximumWidth: 400
-                Layout.bottomMargin: units.smallSpacing
-                color: Utils.adjustAlpha(theme.textColor, 0.7)
-                maximumLineCount: 2
-                horizontalAlignment: Text.AlignLeft
-                text: internal.subText
-            }
-        }
-    }
+    Plasmoid.compactRepresentation: systray ? compactIconOnly : compact
 
     Component {
         id: compact
@@ -241,8 +131,7 @@ Item {
     Component {
         id: compactIconOnly
         PlasmaCore.IconItem {
-            id: iconLayout
-            source: mpris2.playing ? 'media-playback-start' : 'media-playback-pause'
+            source: mpris2.playbackStatus === 'Playing' ? 'media-playback-start' : 'media-playback-pause'
 
             MediaPlayerArea {
                 anchors.fill: parent
@@ -253,44 +142,52 @@ Item {
                         plasmoid.expanded = !plasmoid.expanded
                 }
             }
-
-            Component.onCompleted: toolTip.visualParent = iconLayout
         }
     }
 
-    Plasmoid.compactRepresentation: systray ? compactIconOnly : compact
-    Plasmoid.fullRepresentation: FullApplet { id: full }
+    Plasmoid.fullRepresentation: FullApplet {
+        id: full
+    }
 
     Plasmoid.preferredRepresentation: plasmoid.formFactor === PlasmaCore.Types.Planar
         ? Plasmoid.fullRepresentation : Plasmoid.compactRepresentation
 
-    Plasmoid.icon: internal.cover || internal.icon
+    Plasmoid.icon: internal.icon
     Plasmoid.title: systray ? mpris2.identity : 'PlayBar'
     Plasmoid.toolTipMainText: internal.title
     Plasmoid.toolTipSubText: internal.subText
     Plasmoid.toolTipTextFormat: Text.StyledText
     Plasmoid.backgroundHints: playbarEngine.backgroundHint
 
-    function debug() {
-        var args = Array.prototype.slice.call(arguments, debug.length).join(' ')
-        console.log('playbar:', args)
+    function debug(str, msg) {
+        if (msg === undefined)
+            msg = ''
+            console.debug('audoban.applet.playbar: ' + str, msg)
     }
 
-    //!BEGIN: Context menu actions
+    //! Context menu actions
     function action_raise() {
         mpris2.startOperation('Raise')
     }
     function action_playPause() {
-        mpris2.playPause()
+        if (mpris2.source === 'spotify') {
+            mpris2.startOperation('PlayPause')
+            return
+        }
+        if (mpris2.playbackStatus !== 'Playing')
+            mpris2.startOperation('Play')
+        else
+            mpris2.startOperation('PlayPause')
     }
     function action_previous() {
-        mpris2.previous()
+        mpris2.startOperation('Previous')
     }
     function action_next() {
-        mpris2.next()
+        mpris2.startOperation('Next')
     }
     function action_stop() {
-        mpris2.stop()
+        if (mpris2.playbackStatus !== 'Stopped')
+            mpris2.startOperation('Stop')
     }
     function action_quit() {
         mpris2.startOperation('Quit')
@@ -302,8 +199,7 @@ Item {
         playbarEngine.showSettings()
     }
     function action_player0() {
-        if (mpris2.recentSources.length > 0)
-            executable.startPlayer(0)
+        executable.startPlayer(0)
     }
     function action_player1() {
         executable.startPlayer(1)
@@ -311,42 +207,29 @@ Item {
     function action_player2() {
         executable.startPlayer(2)
     }
-    function action_player3() {
-        executable.startPlayer(3)
-    }
-    function action_player4() {
-        executable.startPlayer(4)
-    }
-    //!END: Context menu actions
 
     Component.onCompleted: {
         plasmoid.formFactorChanged()
         plasmoid.removeAction('configure')
         plasmoid.setAction('configure', i18n('Configure PlayBar'), 'configure', 'alt+d, s')
-        debug("plugin name", plasmoid.pluginName)
+        console.log("plugin name", plasmoid.pluginName)
     }
 
     QtObject {
         id: internal
 
-        property string icon: mpris2.sourceActive ? mpris2.icon(mpris2.currentSource)
-                                                  : mpris2.recentSources.length > 0
-                                                    ? mpris2.recentSources[0].icon : 'media-playback-start'
+        property string icon: mpris2.artUrl != '' ? Qt.resolvedUrl(mpris2.artUrl)
+        : mpris2.recentSources.length > 0 ? mpris2.recentSources[0].icon : 'media-playback-start'
 
-        property string cover: mpris2.artUrl !== '' ? Qt.resolvedUrl(mpris2.artUrl)
-                                                    : ''
+        property string title: mpris2.title != '' ? mpris2.title
+        : mpris2.recentSources.length > 0 ? mpris2.recentSources[0].identity : 'PlayBar'
 
-        property string title: mpris2.title !== '' ? mpris2.title
-                                                   : mpris2.recentSources.length > 0
-                                                     ? mpris2.recentSources[0].identity  : 'PlayBar'
+        property string artist: mpris2.artist != '' ? i18n('<b>By</b> %1 ', mpris2.artist) : ''
 
-        property string artist: mpris2.artist !== '' ? i18n('<b>By</b> %1 ', mpris2.artist) : ''
-
-        property string album: mpris2.album !== '' ? i18n('<b>On</b> %1', mpris2.album) : ''
+        property string album: mpris2.album != '' ? i18n('<b>On</b> %1', mpris2.album) : ''
 
         property string subText: (title === 'PlayBar' && artist === '' && album === '')
-                                 ? i18n('Client MPRIS2, allows you to control your favorite media player')
-                                 : artist + album
+        ? i18n('Client MPRIS2, allows you to control your favorite media player') : artist + album
     }
 
     // ENUMS
@@ -370,7 +253,6 @@ Item {
     }
 
     Plasmoid.onContextualActionsAboutToShow: {
-        toolTip.hideToolTip()
         plasmoid.clearActions()
 
         var icon = mpris2.icon(mpris2.currentSource)
@@ -381,45 +263,22 @@ Item {
             if (playbarEngine.compactStyle !== playbar.playbackButtons) {
                 plasmoid.setAction('previous', i18n('Play previous track'), 'media-skip-backward')
 
-                if (mpris2.playing)
+                if (mpris2.playbackStatus === 'Playing')
                     plasmoid.setAction('playPause', i18n('Pause'), 'media-playback-pause')
                 else
                     plasmoid.setAction('playPause', i18n('Play'), 'media-playback-start')
 
                 plasmoid.setAction('next', i18n('Play next track'), 'media-skip-forward')
-
-                // enable/disable actions
-                plasmoid.action('previous').enabled = mpris2.canGoPrevious
-                plasmoid.action('playPause').enabled = mpris2.canPlayPause
-                plasmoid.action('next').enabled = mpris2.canGoNext
             }
 
             plasmoid.setAction('stop', i18n('Stop'), 'media-playback-stop')
-            plasmoid.setAction('quit', i18n('Quit'), 'application-exit')
-
-            // enable/disable actions
-            plasmoid.action('raise').enabled = mpris2.canRaise
-            plasmoid.action('stop').enabled = mpris2.canControl
-            plasmoid.action('quit').enabled = mpris2.canQuit
-
+            plasmoid.setAction('nextSource', i18n('Next multimedia source'), 'go-next')
             plasmoid.setActionSeparator('sep1')
-
-            // find the next source
-            var ns = mpris2.sources.filter(function(e){return e !== '@multiplex'}).sort()
-
-            if (ns.length > 1) {
-                var index = ns.indexOf(mpris2.currentSource)
-                index = index + 1 < ns.length && index !== -1 ? index + 1 : 0
-
-                if (ns[index] !== mpris2.currentSource) {
-                    plasmoid.setAction('nextSource', i18n('Next source (%1)', mpris2.getIdentity(ns[index])), 'go-next')
-                }
-            }
-
+            plasmoid.setAction('quit', i18n('Quit'), 'application-exit')
         } else {
             var sources = mpris2.recentSources
 
-            for (var i = 0; i < Math.min(sources.length, 5); i++)
+            for (var i = 0; i < sources.length; i++)
                 plasmoid.setAction('player' + i, sources[i].identity, sources[i].icon)
 
             if (sources.length > 0)

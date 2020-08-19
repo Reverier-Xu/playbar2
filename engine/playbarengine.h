@@ -46,7 +46,9 @@ protected:
     bool updateSourceEvent(const QString &source) override;
 
 private:
-    const char *const PROVIDER {"Provider"};
+    static constexpr const char *PROVIDER {
+        "Provider"
+    };
     PlayBar *m_playbar;
 };
 

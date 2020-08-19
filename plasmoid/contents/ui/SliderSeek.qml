@@ -3,7 +3,7 @@
 *
 *   This program is free software; you can redistribute it and/or modify
 *   it under the terms of the GNU Library General Public License as
-*   published by the Free Software Foundation; either version 3 or
+*   published by the Free Software Foundation; either version 2 or
 *   (at your option) any later version.
 *
 *   This program is distributed in the hope that it will be useful,
@@ -16,7 +16,7 @@
 *   Free Software Foundation, Inc.,
 *   51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 */
-import QtQuick 2.4
+import QtQuick 2.7
 import QtQuick.Layouts 1.2
 import org.kde.plasma.components 2.0 as PlasmaComponents
 
@@ -33,35 +33,23 @@ RowLayout {
     Layout.fillWidth: true
     Layout.minimumHeight: implicitHeight + units.smallSpacing
 
-
-    states: State {
-        when: mpris2.position > mpris2.length
-        PropertyChanges {
-            target: labelLeft
-            type: 'length'
-            position: 0
-        }
-        PropertyChanges {
-            target: labelRight
-            type: 'position'
-            position: mpris2.position
-        }
-    }
-
     TimeLabel {
         id: labelLeft
 
         property bool labelSwitch: plasmoid.configuration.TimeLabelSwitch
 
-        type: labelSwitch ? 'length' : 'position'
-        position: labelSwitch ? 0 : slider.value
+        currentTime: labelSwitch ? mpris2.length : slider.value
         interactive: true
+        horizontalAlignment: Text.AlignHCenter
+        minusFrontOfZero: false
+
+        onCurrentTimeChanged: {
+            positionUpdate()
+        }
 
         onClicked: plasmoid.configuration.TimeLabelSwitch = !labelSwitch
 
-        horizontalAlignment: Text.AlignHCenter
-        Layout.alignment: Qt.AlignHCenter
-        Layout.minimumWidth: units.largeSpacing * (mpris2.length >= 3600 ? 2.8 : 2.2)
+        Layout.minimumWidth: units.largeSpacing * 2.2
     }
 
     PlasmaComponents.Slider {
@@ -72,7 +60,7 @@ RowLayout {
         stepSize: 1
         activeFocusOnPress: false
         updateValueWhileDragging: true
-        enabled: mpris2.canSeek || mpris2.canControl
+        enabled: mpris2.canSeek && maximumValue != 0
 
         Layout.fillWidth: true
         Layout.fillHeight: true
@@ -84,7 +72,7 @@ RowLayout {
         }
 
         onValueChanged: {
-            if (pressed)
+            if (pressed && playbarEngine.compactStyle !== playbar.seekBar)
                 mpris2.waitGetPosition()
         }
 
@@ -119,14 +107,29 @@ RowLayout {
 
         property bool labelSwitch: plasmoid.configuration.TimeLabelSwitch
 
-        position: slider.value
+        currentTime: slider.value
         interactive: true
-        type: labelSwitch ? 'position' : 'remaining'
+        minusFrontOfZero: !labelSwitch
+
+        onCurrentTimeChanged: {
+            if (labelSwitch)
+                positionUpdate()
+            else
+                remainingUpdate()
+        }
+
+        onLabelSwitchChanged: {
+            if (labelSwitch)
+                positionUpdate()
+            else
+                remainingUpdate()
+        }
 
         onClicked: plasmoid.configuration.TimeLabelSwitch = !labelSwitch
 
         horizontalAlignment: Text.AlignHCenter
-        Layout.minimumWidth: units.largeSpacing * (mpris2.length >= 3600 ? 2.8 : 2.2)
+
+        Layout.minimumWidth: units.largeSpacing * 2.2
         Layout.alignment: Qt.AlignHCenter
     }
 }

@@ -18,6 +18,12 @@
  */
 .pragma library
 
+var iconApplication
+var Plasmoid
+var i18n
+
+
+
 //  Color manipulation utilities
 //  Take it from Breeze project
 function blendColors( clr0, clr1, p ) {
@@ -33,6 +39,7 @@ function adjustAlpha( clr, a ) {
 // Lightness: -1..1
 // Return a { h, s, l } object
 function rgbToHsl( clr ) {
+
 	//The RGB values are divided by 255 to change the range from 0..255 to 0..1
 	var R = clr.r
 	var G = clr.g

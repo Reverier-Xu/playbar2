@@ -19,8 +19,6 @@
 
 #include "playbar.h"
 
-#include <cmath>
-
 #include <QAction>
 #include <QIcon>
 
@@ -32,132 +30,76 @@
 #include <Plasma/Service>
 #include <Plasma/ServiceJob>
 
+
 #include "playbarsettings.h"
 
 using namespace Plasma;
 
 PlayBar::PlayBar(KSharedConfigPtr &config , QObject *parent)
     : QObject(parent),
+      m_configDialog(nullptr),
       m_config(config),
-      m_data(new Plasma::DataEngine::Data()),
-      m_timerNextSource(new QTimer(this))
+      m_data(new Plasma::DataEngine::Data())
 {
-    m_collection = new KActionCollection(this, QStringLiteral("PlayBar"));
-    m_collection->setComponentDisplayName(QStringLiteral("PlayBar"));
+    m_dc = new DataEngineConsumer();
+    m_collection = new KActionCollection(this, QLatin1String("PlayBar"));
+    m_collection->setComponentDisplayName(QLatin1String("PlayBar"));
 
-    m_playpause = m_collection->addAction(QStringLiteral("play-pause"), this, SLOT(action_playPause()));
-    m_playpause->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-start")));
+    m_playpause = m_collection->addAction(QLatin1String("play-pause"), this, SLOT(slotPlayPause()));
+    m_playpause->setIcon(QIcon::fromTheme(QLatin1String("media-playback-start")));
     m_playpause->setText(i18n("Play/Pause"));
     KGlobalAccel::setGlobalShortcut(m_playpause, Qt::Key_MediaPlay);
 
-    m_stop = m_collection->addAction(QStringLiteral("stop"), this, SLOT(action_stop()));
-    m_stop->setIcon(QIcon::fromTheme(QStringLiteral("media-playback-stop")));
+    m_stop = m_collection->addAction(QLatin1String("stop"), this, SLOT(slotStop()));
+    m_stop->setIcon(QIcon::fromTheme(QLatin1String("media-playback-stop")));
     m_stop->setText(i18n("Stop"));
     KGlobalAccel::setGlobalShortcut(m_stop, Qt::Key_MediaStop);
 
-    m_next = m_collection->addAction(QStringLiteral("next"), this, SLOT(action_next()));
-    m_next->setIcon(QIcon::fromTheme(QStringLiteral("media-skip-forward")));
+    m_next = m_collection->addAction(QLatin1String("next"), this, SLOT(slotNext()));
+    m_next->setIcon(QIcon::fromTheme(QLatin1String("media-skip-forward")));
     m_next->setText(i18n("Next track"));
     KGlobalAccel::setGlobalShortcut(m_next, Qt::Key_MediaNext);
 
-    m_previous = m_collection->addAction(QStringLiteral("previous"), this, SLOT(action_previous()));
-    m_previous->setIcon(QIcon::fromTheme(QStringLiteral("media-skip-backward")));
+    m_previous = m_collection->addAction(QLatin1String("previous"), this, SLOT(slotPrevious()));
+    m_previous->setIcon(QIcon::fromTheme(QLatin1String("media-skip-backward")));
     m_previous->setText(i18n("Previous track"));
     KGlobalAccel::setGlobalShortcut(m_previous, Qt::Key_MediaPrevious);
 
-    m_forward = m_collection->addAction(QStringLiteral("seek-forward"), this, SLOT(action_forward()));
-    m_forward->setIcon(QIcon::fromTheme(QStringLiteral("media-seek-forward")));
-    m_forward->setText(i18n("Seek forward"));
-    KGlobalAccel::setGlobalShortcut(m_forward, QKeySequence{Qt::META + Qt::Key_MediaNext});
+    m_openMediaPlayer = m_collection->addAction(QLatin1String("toggle-mediaplayer"), this,
+                        SLOT(slotToggleWinMediaPlayer()));
+    m_openMediaPlayer->setText(i18n("Toggle window media player"));
+    KGlobalAccel::setGlobalShortcut(m_openMediaPlayer, QKeySequence());
 
-    m_backward = m_collection->addAction(QStringLiteral("seek-backward"), this, SLOT(action_backward()));
-    m_backward->setIcon(QIcon::fromTheme(QStringLiteral("media-seek-backward")));
-    m_backward->setText(i18n("Seek backward"));
-    KGlobalAccel::setGlobalShortcut(m_backward, QKeySequence{Qt::META + Qt::Key_MediaPrevious});
-
-    m_raise = m_collection->addAction(QStringLiteral("toggle-mediaplayer"), this, SLOT(action_raise()));
-    m_raise->setText(i18n("Toggle window media player"));
-    KGlobalAccel::setGlobalShortcut(m_raise, QKeySequence{Qt::META + Qt::Key_MediaPlay});
-
-    m_nextSource = m_collection->addAction(QStringLiteral("next-source"), this, SLOT(action_nextSource()));
-    m_nextSource->setIcon(QIcon::fromTheme(QStringLiteral("go-next")));
-    m_nextSource->setText(i18n("Next source"));
-    KGlobalAccel::setGlobalShortcut(m_nextSource, QKeySequence{});
-
-    m_timerNextSource->setInterval(250);
-    m_timerNextSource->setSingleShot(true);
+    connect(m_configDialog, SIGNAL(settingsChanged(QString)), this, SLOT(loadSettings()));
 }
 
 PlayBar::~PlayBar()
 {
 }
 
-QString PlayBar::source() const {
-    return mpris2_source;
-}
-
-void PlayBar::setSource(const QString &source) {
-    if (!m_mpris2Engine)
-        m_mpris2Engine = dataEngine(MPRIS2);
-    else
-        m_mpris2Engine->disconnectSource(mpris2_source, this);
-
-    mpris2_source = source.trimmed();
-    if (!mpris2_source.isEmpty()) {
-        m_mpris2Engine->connectSource(mpris2_source, this);
-    }
-
-    if (m_goNextSource) {
-        m_goNextSource = false;
-        emit nextSourceTriggered();
-    }
-}
-
-void PlayBar::action_playPause()
+void PlayBar::slotPlayPause()
 {
-    startAction("PlayPause");
+    startOperationOverMpris2("PlayPause");
 }
 
-void PlayBar::action_stop()
+void PlayBar::slotStop()
 {
-    startAction("Stop");
+    startOperationOverMpris2("Stop");
 }
 
-void PlayBar::action_next()
+void PlayBar::slotNext()
 {
-    startAction("Next");
+    startOperationOverMpris2("Next");
 }
 
-void PlayBar::action_previous()
+void PlayBar::slotPrevious()
 {
-    startAction("Previous");
+    startOperationOverMpris2("Previous");
 }
 
-void PlayBar::action_forward()
+void PlayBar::slotToggleWinMediaPlayer()
 {
-    constexpr auto us{static_cast<qlonglong>(10 / std::pow(10, -6))};
-    seek(us);
-}
-
-void PlayBar::action_backward()
-{
-    constexpr auto us{static_cast<qlonglong>(-10 / std::pow(10, -6))};
-    seek(us);
-}
-
-void PlayBar::action_raise()
-{
-    startAction("Raise");
-}
-
-void PlayBar::action_nextSource()
-{
-    if (!m_timerNextSource->isActive()) {
-        qDebug() << Q_FUNC_INFO << m_goNextSource << mpris2_source;
-        m_timerNextSource->start();
-        m_goNextSource = !m_goNextSource;
-        emit nextSourceTriggered();
-    }
+    startOperationOverMpris2("Raise");
 }
 
 void PlayBar::showSettings()
@@ -180,53 +122,24 @@ const DataEngine::Data &PlayBar::data()
     // Read preferences from the KConfig object.
     config->read();
 
-    m_data->insert(QStringLiteral("CompactStyle"),     config->compactStyle());
-    m_data->insert(QStringLiteral("MaxWidth"),         config->maxWidth());
-    m_data->insert(QStringLiteral("ExpandedStyle"),    config->expandedStyle());
-    m_data->insert(QStringLiteral("ShowStop"),         config->showStop());
-    m_data->insert(QStringLiteral("ShowVolumeSlider"), config->showVolumeSlider());
-    m_data->insert(QStringLiteral("ShowSeekSlider"),   config->showSeekSlider());
-    m_data->insert(QStringLiteral("BackgroundHint"),   config->backgroundHint());
-    m_data->insert(QStringLiteral("ShadowColor"),      config->shadowColor());
-    m_data->insert(QStringLiteral("NextSource"),       m_goNextSource.load());
+    m_data->insert("CompactStyle",     config->compactStyle());
+    m_data->insert("MaxWidth",         config->maxWidth());
+    m_data->insert("ExpandedStyle",    config->expandedStyle());
+    m_data->insert("ShowStop",         config->showStop());
+    m_data->insert("ShowVolumeSlider", config->showVolumeSlider());
+    m_data->insert("ShowSeekSlider",   config->showSeekSlider());
+    m_data->insert("BackgroundHint",   config->backgroundHint());
+    m_data->insert("ShadowColor",      config->shadowColor());
 
     return *m_data;
 }
 
-inline void PlayBar::startAction(const QString &name) const
+inline void PlayBar::startOperationOverMpris2(const QString &name) const
 {
-    if(!m_mpris2Engine || mpris2_source.isEmpty())
-        return;
-
-    auto *service = m_mpris2Engine->serviceForSource(mpris2_source);
-    auto operation = service->operationDescription(name);
-    auto *job = service->startOperationCall(operation);
-
-    connect(job, SIGNAL(finished(KJob *)), service, SLOT(deleteLater()));
+    DataEngine *mpris2 = m_dc->dataEngine(MPRIS2);
+    Service *serv = mpris2->serviceForSource(mpris2_source);
+    const QVariantMap &op = serv->operationDescription(name);
+    ServiceJob *job = serv->startOperationCall(op);
+    connect(job, SIGNAL(finished(KJob *)), serv, SLOT(deleteLater()));
 }
-
-inline void PlayBar::seek(qlonglong us) const
-{
-    if(!m_mpris2Engine || mpris2_source.isEmpty())
-        return;
-
-    auto *service = m_mpris2Engine->serviceForSource(mpris2_source);
-    auto operation = service->operationDescription(QStringLiteral("SetPosition"));
-    operation["microseconds"] = std::max(m_currentPosition + us, static_cast<qlonglong>(0));
-    auto *job = service->startOperationCall(operation);
-
-    connect(job, SIGNAL(finished(KJob *)), service, SLOT(deleteLater()));
-}
-
-void PlayBar::dataUpdated(const QString &sourceName, const DataEngine::Data &data)
-{
-    if (sourceName == mpris2_source) {
-        if (data.contains("Position")) {
-            m_currentPosition = data["Position"].toLongLong();
-        }
-    } else {
-        m_mpris2Engine->disconnectSource(sourceName, this);
-    }
-}
-
 // kate: indent-mode cstyle; indent-width 4; replace-tabs on;
